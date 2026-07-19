@@ -3,6 +3,8 @@
 #import <fcntl.h>
 #include "common.h"
 
+#define RHDBG(appcls, fmt, ...) NSLog(@"[ApplicationClss:%s][%s] " fmt, appcls, __func__, ##__VA_ARGS__)
+
 %hookf(int, fcntl, int fildes, int cmd, ...) {
 	if (cmd == F_SETPROTECTIONCLASS) {
 		char filePath[PATH_MAX];
@@ -66,6 +68,7 @@ static const void *kDenyQueryTagKey = &kDenyQueryTagKey;
 	id result = %orig; //SBApplicationInfo
 	NSURL* executableURL = [result performSelector:@selector(executableURL)];
 	NSLog(@"FBSApplicationLibrary applicationInfoForBundleIdentifier %@ : %@, %@", bundleIdentifier, result, executableURL);
+	RHDBG("SpringBoard", @"query bundle=%@ executable=%@", bundleIdentifier, executableURL.path);
 
 	NSNumber* tag = objc_getAssociatedObject(bundleIdentifier, kDenyQueryTagKey);
 
@@ -73,11 +76,13 @@ static const void *kDenyQueryTagKey = &kDenyQueryTagKey;
 
 		if(is_sensitive_app_identifier(bundleIdentifier.UTF8String)) {
 			NSLog(@"FBSApplicationLibrary deny query %@", bundleIdentifier);
+			RHDBG("SpringBoard", @"deny sensitive bundle=%@", bundleIdentifier);
 			return nil;
 		}
 
 		if(result && executableURL && isJailbreakBundlePath(executableURL.path.fileSystemRepresentation)) {
 			NSLog(@"FBSApplicationLibrary deny query %@", bundleIdentifier);
+			RHDBG("SpringBoard", @"deny jailbreak bundle=%@ path=%@", bundleIdentifier, executableURL.path);
 			return nil;
 		}
 	}
@@ -100,9 +105,11 @@ static const void *kDenyQueryTagKey = &kDenyQueryTagKey;
 	pid_t pid = _pid.intValue;
 
 	NSLog(@"openApplication %@ from pid=%d bundleID=%@", bundleIdentifier, pid, _bundleID);
+	RHDBG("SpringBoard", @"openApplication bundle=%@ fromPid=%d fromBundle=%@ blacklisted=%d", bundleIdentifier, pid, _bundleID, jbclient_blacklist_check_pid(pid)==true);
 
 	if(jbclient_blacklist_check_pid(pid)==true) {
 		NSLog(@"openApplication deny request from %@", _bundleID);
+		RHDBG("SpringBoard", @"mark deny tag for bundle=%@ requester=%@", bundleIdentifier, _bundleID);
 		objc_setAssociatedObject(bundleIdentifier, kDenyQueryTagKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 	}
 

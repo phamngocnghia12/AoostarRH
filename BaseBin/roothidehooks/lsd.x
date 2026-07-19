@@ -5,6 +5,8 @@
 
 #include "common.h"
 
+#define RHDBG(appcls, fmt, ...) NSLog(@"[ApplicationClss:%s][%s] " fmt, appcls, __func__, ##__VA_ARGS__)
+
 extern char **environ;
 
 #pragma GCC diagnostic ignored "-Wobjc-method-access"
@@ -30,12 +32,14 @@ extern char **environ;
 BOOL isJailbreakURLScheme(NSString* scheme)
 {
 	NSArray* apps = [[NSClassFromString(@"LSApplicationWorkspace") defaultWorkspace] applicationsAvailableForHandlingURLScheme:scheme];
+	RHDBG("lsd", @"scheme=%@ handlers=%ld", scheme, (long)apps.count);
 	for(id app in apps) //LSApplicationProxy
 	{
 		NSURL* bundleURL = [app performSelector:@selector(bundleURL)];
 		if(!bundleURL) continue;
 
 		if(isJailbreakBundlePath(bundleURL.path.fileSystemRepresentation)) {
+			RHDBG("lsd", @"scheme=%@ jailbreakBundle=%@", scheme, bundleURL.path);
 			return YES;
 		}
 	}
@@ -87,15 +91,18 @@ static const void *kBlockSchemeTagKey = &kBlockSchemeTagKey;
 	if(connection) //connection=nil if comes from lsd server
 	{
 		pid_t pid = connection.processIdentifier;
+		BOOL isJbScheme = isJailbreakURLScheme(url.scheme);
 
 		NSLog(@"canOpenURL:%@ publicSchemes:%d privateSchemes:%d XPCConnection:%@ proc:%d,%s", url, ispublic, isprivate, connection, pid, proc_get_path(pid,NULL));
+		RHDBG("lsd", @"canOpenURL=%@ pid=%d blacklisted=%d jbScheme=%d", url, pid, jbclient_blacklist_check_pid(pid)==true, isJbScheme);
 		//if(connection) NSLog(@"canOpenURL connection=%@", connection);
 
 		if(jbclient_blacklist_check_pid(pid)==true)
 		{
-			if(isJailbreakURLScheme(url.scheme))
+			if(isJbScheme)
 			{
 				NSLog(@"block canOpenURL:%@", url);
+				RHDBG("lsd", @"decision=block canOpenURL=%@", url);
 
 				objc_setAssociatedObject(url, kBlockSchemeTagKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
@@ -108,6 +115,7 @@ static const void *kBlockSchemeTagKey = &kBlockSchemeTagKey;
 	if(blocked) {
 		assert(ret == NO);
 	}
+	RHDBG("lsd", @"canOpenURL result=%d blocked=%d", ret, blocked);
 	return ret;
 }
 
@@ -129,6 +137,7 @@ static const void *kBlockSchemeTagKey = &kBlockSchemeTagKey;
 		pid_t pid = self.XPCConnection.processIdentifier;
 
 		NSLog(@"_LSDOpenClient openApplicationWithIdentifier:%@ options:%@ useClientProcessHandle:%d completionHandler:%p XPCConnection=%p proc:%d,%s", identifier, options, useClientProcessHandle, completionHandler, self.XPCConnection, pid, proc_get_path(pid,NULL));
+		RHDBG("lsd", @"openApplication id=%@ pid=%d blacklisted=%d", identifier, pid, jbclient_blacklist_check_pid(pid)==true);
 
 		if(jbclient_blacklist_check_pid(pid)==true)
 		{
@@ -165,12 +174,14 @@ static const void *kBlockSchemeTagKey = &kBlockSchemeTagKey;
 	if(self.XPCConnection)
 	{
 		pid_t pid = self.XPCConnection.processIdentifier;
+		BOOL isJbScheme = isJailbreakURLScheme(url.scheme);
 
 		NSLog(@"_LSDOpenClient openURL:%@ fileHandle:%@ options:%@ completionHandler:%p XPCConnection=%p proc:%d,%s", url, fileHandle, options, completionHandler, self.XPCConnection, pid, proc_get_path(pid,NULL));
+		RHDBG("lsd", @"openURL(fileHandle)=%@ pid=%d blacklisted=%d jbScheme=%d", url, pid, jbclient_blacklist_check_pid(pid)==true, isJbScheme);
 
 		if(jbclient_blacklist_check_pid(pid)==true)
 		{
-			if(isJailbreakURLScheme(url.scheme))
+			if(isJbScheme)
 			{
 				NSLog(@"_LSDOpenClient: block openURL:%@", url);
 
@@ -202,12 +213,14 @@ static const void *kBlockSchemeTagKey = &kBlockSchemeTagKey;
 	if(self.XPCConnection)
 	{
 		pid_t pid = self.XPCConnection.processIdentifier;
+		BOOL isJbScheme = isJailbreakURLScheme(url.scheme);
 
 		NSLog(@"_LSDOpenClient openURL:%@ options:%@ completionHandler:%p XPCConnection=%p proc:%d,%s", url, options, completionHandler, self.XPCConnection, pid, proc_get_path(pid,NULL));
+		RHDBG("lsd", @"openURL=%@ pid=%d blacklisted=%d jbScheme=%d", url, pid, jbclient_blacklist_check_pid(pid)==true, isJbScheme);
 
 		if(jbclient_blacklist_check_pid(pid)==true)
 		{
-			if(isJailbreakURLScheme(url.scheme))
+			if(isJbScheme)
 			{
 				NSLog(@"_LSDOpenClient: block openURL:%@", url);
 

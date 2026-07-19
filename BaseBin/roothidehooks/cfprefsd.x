@@ -3,6 +3,8 @@
 #include <roothide.h>
 #include "common.h"
 
+#define RHDBG(appcls, fmt, ...) NSLog(@"[ApplicationClss:%s][%s] " fmt, appcls, __func__, ##__VA_ARGS__)
+
 #define PROC_PIDPATHINFO_MAXSIZE        (4*MAXPATHLEN)
 
 pid_t __thread gCurrentClientPid = 0;
@@ -66,13 +68,16 @@ BOOL new_CFPrefsGetPathForTriplet(CFStringRef identifier, CFStringRef user, BOOL
 	{
 		NSString* origPath = [NSString stringWithUTF8String:(char*)buffer];
 		BOOL needsRedirection = preferencePlistNeedsRedirection(origPath);
+		BOOL denyByBlacklist = NO;
 
 		if (needsRedirection) {
 			if(gCurrentClientPid>0 && jbclient_blacklist_check_pid(gCurrentClientPid)==true) {
 				NSLog(@"CFPrefsGetPathForTriplet deny redirection for process (%d) %s", gCurrentClientPid, proc_get_path(gCurrentClientPid,NULL));
+				denyByBlacklist = YES;
 				needsRedirection = NO;
 			}
 		}
+		RHDBG("cfprefsd", @"identifier=%@ pid=%d needsRedirection=%d denyByBlacklist=%d path=%@", identifier, gCurrentClientPid, needsRedirection, denyByBlacklist, origPath);
 		
 		if (needsRedirection) {
 			NSLog(@"Plist redirected to jbroot:%@", origPath);
@@ -107,6 +112,7 @@ void* new__CFPrefsDaemon_handleMessage_fromPeer_replyHandler__(id self, xpc_obje
     pid_t clientPid = xpc_connection_get_pid(connection);
 
 	NSLog(@"CFPrefsDaemon: handleMessage %p/%d pid=%d uid=%d proc=%s", message, xpc_get_type(message)==XPC_TYPE_DICTIONARY, clientPid, clientUid, proc_get_path(clientPid,NULL));
+	RHDBG("cfprefsd", @"handleMessage pid=%d uid=%d blacklisted=%d", clientPid, clientUid, clientPid > 0 && jbclient_blacklist_check_pid(clientPid)==true);
 
 	// char* desc = xpc_copy_description(message);
 	// NSLog(@"CFPrefsDaemon: handleMessage Operation=%lld, msg=%s", xpc_dictionary_get_int64(message, "CFPreferencesOperation"), desc);

@@ -9,6 +9,8 @@
 
 #include "roothider.h"
 
+#define RHDBG(fmt, ...) SYSLOG("[ApplicationClss:systemhook][%s] " fmt, __func__, ##__VA_ARGS__)
+
 pid_t __getppid()
 {
 	int32_t opt[4] = {
@@ -139,6 +141,7 @@ int __sysctl_hook(int *name, u_int namelen, void *oldp, size_t *oldlenp, const v
 	if(name && namelen && cached_namelen &&
 	 namelen==cached_namelen && memcmp(cached_name, name, namelen*sizeof(name[0]))==0) {
 		if(oldp && oldlenp && *oldlenp>=sizeof(int)) {
+			RHDBG("force developer_mode_status=1 via sysctl mib");
 			*(int*)oldp = 1;
 			*oldlenp = sizeof(int);
 			return 0;
@@ -157,6 +160,7 @@ int __sysctlbyname_hook(const char *name, size_t namelen, void *oldp, size_t *ol
 {
 	if(name && namelen && strncmp(name, "security.mac.amfi.developer_mode_status", namelen)==0) {
 		if(oldp && oldlenp && *oldlenp>=sizeof(int)) {
+			RHDBG("force developer_mode_status=1 via sysctlbyname");
 			*(int*)oldp = 1;
 			*oldlenp = sizeof(int);
 			return 0;

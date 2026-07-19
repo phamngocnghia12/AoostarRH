@@ -13,6 +13,8 @@
 #include "common.h"
 #include "log.h"
 
+#define RHDBG(appcls, fmt, ...) NSLog(@"[ApplicationClss:%s][%s] " fmt, appcls, __func__, ##__VA_ARGS__)
+
 xpc_object_t (*orig_xpc_dictionary_create_reply)(xpc_object_t original);
 xpc_object_t new_xpc_dictionary_create_reply(xpc_object_t original)
 {
@@ -21,6 +23,8 @@ xpc_object_t new_xpc_dictionary_create_reply(xpc_object_t original)
 	{
 		audit_token_t clientToken = {0};
 		xpc_dictionary_get_audit_token(original, &clientToken);
+		pid_t clientPid = audit_token_to_pid(clientToken);
+		RHDBG("xpc", @"create_reply pid=%d blacklisted=%d", clientPid, isBlacklistedToken(&clientToken));
 
 		if (isBlacklistedToken(&clientToken))
 		{
@@ -43,9 +47,11 @@ int new_xpc_pipe_routine_reply(xpc_object_t reply)
 
 			audit_token_t clientToken = {0};
 			xpc_dictionary_get_audit_token(original, &clientToken);
+			pid_t clientPid = audit_token_to_pid(clientToken);
 
 			uint64_t routine = xpc_dictionary_get_uint64(original, "routine");
 			uint64_t subsystem = xpc_dictionary_get_uint64(original, "subsystem");
+			RHDBG("xpc", @"routine_reply pid=%d subsystem=%llu routine=%llu", clientPid, subsystem, routine);
 
 			/*
 			if(subsystem==2 && routine==708)
@@ -102,6 +108,7 @@ int new_xpc_pipe_routine_reply(xpc_object_t reply)
 				if (error==0 && !isSelfBundleIdentifier && !isSafeBundleIdentifier)
 				{
 					JBLogDebug("hide coalition (%s) (%s) from blacklisted process(%d) %s", name, bundle_identifier, audit_token_to_pid(clientToken), proc_get_path(audit_token_to_pid(clientToken), NULL));
+					RHDBG("xpc", @"hide coalition pid=%d name=%s bundle=%s", clientPid, name ? name : "", bundle_identifier ? bundle_identifier : "");
 
 					xpc_dictionary_set_value(reply, "cid", NULL);
 					xpc_dictionary_set_value(reply, "name", NULL);
@@ -141,6 +148,8 @@ void check_usreboot_msg(xpc_object_t xmsg)
 
 	audit_token_t clientToken = {0};
 	xpc_dictionary_get_audit_token(xmsg, &clientToken);
+	pid_t clientPid = audit_token_to_pid(clientToken);
+	RHDBG("xpc", @"incoming message pid=%d blacklisted=%d", clientPid, isBlacklistedToken(&clientToken));
 
 	uint32_t csflags = 0;
 	csops(audit_token_to_pid(clientToken), CS_OPS_STATUS, &csflags, sizeof(csflags));
@@ -198,6 +207,7 @@ void roothide_handle_xpc_msg(xpc_object_t xmsg)
 	{
 		uint64_t routine = xpc_dictionary_get_uint64(xmsg, "routine");
 		uint64_t subsystem = xpc_dictionary_get_uint64(xmsg, "subsystem");
+		RHDBG("xpc", @"blacklisted route pid=%d subsystem=%llu routine=%llu", clientPid, subsystem, routine);
 		if (subsystem == 2 && routine == 708)
 		{
 			volatile char *bundle = NULL;
@@ -229,6 +239,7 @@ void roothide_handle_xpc_msg(xpc_object_t xmsg)
 			if (name && !isSelfBundleIdentifier && !isSafeBundleIdentifier)
 			{
 				JBLogDebug("hide job (%s) (%s) from blacklisted process(%d) %s", name, bundle, clientPid, proc_get_path(clientPid, NULL));
+				RHDBG("xpc", @"hide job pid=%d name=%s bundle=%s", clientPid, name ? name : "", bundle ? bundle : "");
 				xpc_dictionary_set_string(xmsg, "name", "");
 			}
 
@@ -255,6 +266,7 @@ void roothide_handle_xpc_msg(xpc_object_t xmsg)
 			if (pid > 0 && pid != clientPid && (isJailbrokenPath || (!isSafeBundleIdentifier && !isSelfBundleIdentifier)))
 			{
 				JBLogDebug("hide pid %d (%s) from blacklisted process(%d) %s", pid, path, clientPid, proc_get_path(clientPid, NULL));
+				RHDBG("xpc", @"hide pid target=%d requester=%d path=%s", pid, clientPid, path);
 				xpc_dictionary_set_int64(xmsg, "pid", INT_MAX);
 			}
 		}
